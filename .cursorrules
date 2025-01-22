@@ -1,0 +1,12 @@
+Much of the business world operates on PDFs. Even when there are APIs and web tools, PDFs invariably find their way into any process where humans are involved. Build a simple website where I can upload a PDF and it shows me the extracted text from the PDF. 
+
+Tech Stack:
+-HTML
+-TailwindCSS
+-Python(flask)
+
+Rules:
+-The website should be appealing and functional.
+- Make sure to add error handling.
+- Organize python files in a folder called "Libraries" except app.py
+- organize all files to industry standards

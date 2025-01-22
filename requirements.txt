@@ -11,3 +11,4 @@ python-magic-bin>=0.4.14
 tabula-py>=2.7.0
 openpyxl>=3.0.0
 llama-index-llms-openai
+gunicorn>=20.1.0
