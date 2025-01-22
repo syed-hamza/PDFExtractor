@@ -106,6 +106,7 @@
             <!-- Right Column: Extracted Content -->
             <div class="w-2/5" v-if="result && result.success">
                 <div class="bg-white rounded-lg shadow-md p-6">
+                    <!-- Document Information Section -->
                     <div class="bg-gray-50 rounded-lg p-4 mb-4">
                         <h3 class="text-lg font-semibold mb-2">Document Information</h3>
                         <p class="text-gray-600 mb-4">Total Pages: <span v-text="result.total_pages"></span></p>
@@ -121,11 +122,14 @@
                                     <i class="fas fa-times-circle"></i> Not Indexed
                                 </span>
                             </div>
-                            <button v-if="!result.is_indexed && apiKey" 
-                                    @click="indexDocument(result.id)"
+                            <button v-if="!result.is_indexed" 
+                                    @click="apiKey ? indexDocument(result.id) : showApiKeyModal = true"
                                     :disabled="indexing"
                                     class="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:bg-gray-300">
-                                <span v-if="!indexing">Index Document</span>
+                                <span v-if="!indexing">
+                                    <span v-if="apiKey">Index Document</span>
+                                    <span v-else>Add API Key to Index</span>
+                                </span>
                                 <span v-else>
                                     <i class="fas fa-spinner fa-spin"></i> Indexing...
                                 </span>
@@ -146,14 +150,14 @@
                         </div>
                     </div>
 
+                    <!-- Content Section -->
                     <div class="max-h-[600px] overflow-y-auto">
                         <div v-for="page in result.content" :key="page.page" class="mb-8 pb-6 border-b border-gray-200">
                             <h4 class="font-semibold mb-4 text-lg">Page <span v-text="page.page"></span></h4>
                             
                             <!-- Text Content -->
                             <div class="bg-gray-50 rounded-lg p-4 mb-4">
-                                <h5 class="font-medium mb-2 text-gray-700">Text Content</h5>
-                                <div class="whitespace-pre-wrap text-gray-700" v-html="page.content || 'No text content found on this page.'"></div>
+                                <div class="whitespace-pre-wrap text-gray-700" v-html="page.content || 'No content found on this page.'"></div>
                             </div>
 
                             <!-- Tables -->
@@ -166,7 +170,8 @@
                                                 :class="{'bg-gray-50': rowIndex % 2 === 0}">
                                                 <td v-for="(cell, cellIndex) in row" :key="cellIndex"
                                                     class="px-4 py-2 border border-gray-200 text-sm">
-                                                    {{ cell }}
+                                                    <span v-if="cell !== null">{{ cell }}</span>
+                                                    <span v-else>&nbsp;</span>
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -346,7 +351,7 @@
                     // Chat related data
                     chatOpen: false,
                     showApiKeyModal: false,
-                    apiKey: '',
+                    apiKey: localStorage.getItem('openai_api_key') || '',
                     userInput: '',
                     chatMessages: [],
                     chatLoading: false,
@@ -355,7 +360,7 @@
             },
             mounted() {
                 this.loadHistory();
-                // Show API key modal if no key is set
+                // Only show API key modal if no key is found
                 if (!this.apiKey) {
                     this.showApiKeyModal = true;
                 }
@@ -396,9 +401,6 @@
                             throw new Error(data.error || 'Failed to process PDF')
                         }
 
-                        this.result = data
-                        this.pdfUrl = URL.createObjectURL(file)
-
                         // Save PDF file to server and get permanent URL
                         const saveResponse = await fetch('/save_pdf', {
                             method: 'POST',
@@ -410,13 +412,14 @@
                             throw new Error(saveData.error || 'Failed to save PDF')
                         }
 
+                        this.result = saveData.result  // Use the result from save_pdf which includes ID
                         this.pdfUrl = saveData.pdfUrl
 
                         // Add to history with the extracted text and permanent URL
                         this.addToHistory({
                             name: file.name,
                             timestamp: new Date().toLocaleString(),
-                            result: data,
+                            result: saveData.result,  // Use the result with ID
                             pdfUrl: saveData.pdfUrl,
                             id: saveData.id
                         })

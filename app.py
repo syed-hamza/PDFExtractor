@@ -155,10 +155,15 @@ def save_pdf():
         # Save to database
         pdf_id = db_manager.save_pdf(filename, storage_path, result)
         
+        # Add id to result
+        result['id'] = pdf_id
+        result['is_indexed'] = False
+        
         return jsonify({
             'success': True,
             'id': pdf_id,
-            'pdfUrl': f'/pdf/{pdf_id}'
+            'pdfUrl': f'/pdf/{pdf_id}',
+            'result': result  # Include the full result with ID
         })
         
     except Exception as e:
@@ -183,15 +188,24 @@ def serve_pdf(pdf_id):
 def get_history():
     try:
         history = db_manager.get_history()
+        if not history:
+            return jsonify([])
+            
         return jsonify([{
             'id': item['id'],
             'name': item['name'],
             'timestamp': item['timestamp'],
             'result': item['result'],
-            'pdfUrl': f'/pdf/{item["id"]}'
+            'pdfUrl': f'/pdf/{item["id"]}',
+            'is_indexed': item.get('is_indexed', False)  # Add indexing status
         } for item in history])
+        
+    except sqlite3.Error as e:
+        print(f"Database error in get_history: {str(e)}")
+        return jsonify({'success': False, 'error': 'Database error occurred'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"Unexpected error in get_history: {str(e)}")
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @app.route('/remove_pdf/<pdf_id>', methods=['DELETE'])
 def remove_pdf(pdf_id):

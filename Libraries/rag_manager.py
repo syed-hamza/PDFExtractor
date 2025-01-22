@@ -13,8 +13,17 @@ from pathlib import Path
 class RAGManager:
     def __init__(self, openai_api_key: str):
         """Initialize the RAG manager with OpenAI API key."""
+        if not openai_api_key:
+            raise ValueError("OpenAI API key is required")
+            
         self.openai_api_key = openai_api_key
         self.index_dir = "storage/indices"
+        
+        # Set OpenAI API key
+        import openai
+        openai.api_key = openai_api_key
+        
+        # Create LLM with API key
         self.llm = OpenAI(api_key=openai_api_key)
         
         # Create storage directory if it doesn't exist

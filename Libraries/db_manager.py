@@ -18,19 +18,33 @@ class DBManager:
 
     def init_db(self):
         """Initialize the database with required tables."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS pdfs (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    file_path TEXT NOT NULL,
-                    metadata TEXT NOT NULL,
-                    is_indexed BOOLEAN DEFAULT FALSE
-                )
-            ''')
-            conn.commit()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Drop existing table if it exists
+                cursor.execute('DROP TABLE IF EXISTS pdfs')
+                
+                # Create table with proper schema
+                cursor.execute('''
+                    CREATE TABLE pdfs (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        timestamp TEXT NOT NULL,
+                        file_path TEXT NOT NULL,
+                        metadata TEXT NOT NULL,
+                        is_indexed BOOLEAN DEFAULT FALSE
+                    )
+                ''')
+                conn.commit()
+                print("Database initialized successfully")
+                
+        except sqlite3.Error as e:
+            print(f"Error initializing database: {str(e)}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error initializing database: {str(e)}")
+            raise
 
     def save_pdf(self, name, file_path, metadata):
         """Save PDF information to database."""
@@ -48,18 +62,33 @@ class DBManager:
 
     def get_history(self):
         """Get all PDF history."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM pdfs ORDER BY timestamp DESC LIMIT 10')
-            rows = cursor.fetchall()
-            return [{
-                'id': row[0],
-                'name': row[1],
-                'timestamp': row[2],
-                'file_path': row[3],
-                'result': json.loads(row[4]),
-                'is_indexed': bool(row[5])
-            } for row in rows]
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM pdfs ORDER BY timestamp DESC LIMIT 10')
+                rows = cursor.fetchall()
+                
+                if not rows:
+                    return []
+                    
+                return [{
+                    'id': row[0],
+                    'name': row[1],
+                    'timestamp': row[2],
+                    'file_path': row[3],
+                    'result': json.loads(row[4]) if row[4] else {},
+                    'is_indexed': bool(row[5]) if len(row) > 5 else False
+                } for row in rows]
+                
+        except sqlite3.Error as e:
+            print(f"Database error in get_history: {str(e)}")
+            raise
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error in get_history: {str(e)}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error in get_history: {str(e)}")
+            raise
 
     def remove_pdf(self, pdf_id):
         """Remove PDF from database and file system."""
