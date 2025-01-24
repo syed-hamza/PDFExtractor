@@ -3,10 +3,10 @@ import os
 from llama_index.core import (
     SimpleDirectoryReader,
     VectorStoreIndex,
-    ServiceContext,
     StorageContext,
     load_index_from_storage
 )
+from llama_index.core.settings import Settings
 from llama_index.llms.openai import OpenAI
 from pathlib import Path
 
@@ -26,6 +26,11 @@ class RAGManager:
         # Create LLM with API key
         self.llm = OpenAI(api_key=openai_api_key)
         
+        # Configure settings
+        Settings.llm = self.llm
+        Settings.chunk_size = 1024
+        Settings.chunk_overlap = 20
+        
         # Create storage directory if it doesn't exist
         os.makedirs(self.index_dir, exist_ok=True)
     
@@ -41,17 +46,11 @@ class RAGManager:
     def index_document(self, pdf_path: str, doc_id: str) -> bool:
         """Index a PDF document and store its index."""
         try:
-            # Create service context with OpenAI
-            service_context = ServiceContext.from_defaults(llm=self.llm)
-            
             # Load document
             documents = SimpleDirectoryReader(input_files=[pdf_path]).load_data()
             
             # Create index
-            index = VectorStoreIndex.from_documents(
-                documents,
-                service_context=service_context
-            )
+            index = VectorStoreIndex.from_documents(documents)
             
             # Save index
             index.storage_context.persist(persist_dir=self._get_index_path(doc_id))
@@ -68,14 +67,10 @@ class RAGManager:
                 return "Document is not indexed yet. Please index it first."
             
             # Load the existing index
-            service_context = ServiceContext.from_defaults(llm=self.llm)
             storage_context = StorageContext.from_defaults(
                 persist_dir=self._get_index_path(doc_id)
             )
-            index = load_index_from_storage(
-                storage_context,
-                service_context=service_context
-            )
+            index = load_index_from_storage(storage_context)
             
             # Query the index
             query_engine = index.as_query_engine()

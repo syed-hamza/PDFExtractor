@@ -8,6 +8,7 @@ import tabula
 import pandas as pd
 import numpy as np
 import re
+from PIL import Image
 
 class PDFProcessor:
     @staticmethod
@@ -252,80 +253,82 @@ class PDFProcessor:
                 doc.close()
 
     @staticmethod
-    def extract_tables(page):
+    def extract_tables(page) -> List[List[List[str]]]:
         """Extract tables from a page."""
-        tables = []
         try:
-            # Get raw table data
-            table_data = page.get_text("dict")
+            # Convert page to image
+            pix = page.get_pixmap()
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             
-            # Look for table blocks
-            for block in table_data["blocks"]:
-                if block.get("type") == 1:  # Table block
-                    rows = []
-                    current_row = []
-                    last_y = None
-                    
-                    # Process spans into table cells
-                    for line in block.get("lines", []):
-                        y = line["bbox"][1]  # Y coordinate
-                        
-                        # Start new row if Y coordinate changes significantly
-                        if last_y is not None and abs(y - last_y) > 5:
-                            if current_row:
-                                rows.append(current_row)
-                                current_row = []
-                        
-                        # Add cells to current row
-                        for span in line["spans"]:
-                            current_row.append(span["text"].strip())
-                        
-                        last_y = y
-                    
-                    # Add last row if not empty
-                    if current_row:
-                        rows.append(current_row)
-                    
-                    # Only add table if it has content
-                    if rows and any(any(cell.strip() for cell in row) for row in rows):
-                        tables.append(rows)
+            # Save temporary image
+            temp_img_path = "temp_page.png"
+            img.save(temp_img_path)
+            
+            # Extract tables using tabula
+            tables = tabula.read_pdf(temp_img_path, pages=1, multiple_tables=True)
+            
+            # Clean up
+            os.remove(temp_img_path)
+            
+            # Convert tables to list format and clean data
+            cleaned_tables = []
+            for table in tables:
+                if not table.empty:
+                    # Convert DataFrame to list of lists
+                    table_data = table.values.tolist()
+                    # Clean the data
+                    cleaned_table = [[str(cell).strip() if pd.notna(cell) else None for cell in row] for row in table_data]
+                    cleaned_tables.append(cleaned_table)
+            
+            return cleaned_tables
         except Exception as e:
             print(f"Error extracting tables: {str(e)}")
-        
-        return tables
+            return []
 
     @staticmethod
-    def extract_images(page):
+    def extract_images(page) -> List[Dict[str, Any]]:
         """Extract images from a page."""
         images = []
         try:
-            image_list = page.get_images()
-            for img_index, img in enumerate(image_list):
+            for img_index, img in enumerate(page.get_images()):
                 try:
                     xref = img[0]
                     base_image = page.parent.extract_image(xref)
-                    image_data = base_image["image"]
-                    image_b64 = base64.b64encode(image_data).decode('utf-8')
-                    image_type = base_image["ext"]
                     
-                    images.append({
-                        'index': img_index,
-                        'type': image_type,
-                        'data': f'data:image/{image_type};base64,{image_b64}'
-                    })
+                    if base_image:
+                        image_data = base_image["image"]
+                        image_ext = base_image["ext"]
+                        
+                        # Convert to base64
+                        base64_data = base64.b64encode(image_data).decode('utf-8')
+                        
+                        images.append({
+                            'data': f'data:image/{image_ext};base64,{base64_data}',
+                            'type': image_ext
+                        })
                 except Exception as e:
-                    print(f"Error extracting image: {str(e)}")
+                    print(f"Error processing image {img_index}: {str(e)}")
                     continue
+                    
         except Exception as e:
-            print(f"Error getting images: {str(e)}")
+            print(f"Error extracting images: {str(e)}")
+            
         return images
 
     @staticmethod
     def is_valid_pdf(file_path: str) -> bool:
         """Check if the file is a valid PDF."""
         try:
-            with open(file_path, 'rb') as file:
-                PyPDF2.PdfReader(file)
+            # Try to open with PyMuPDF
+            doc = fitz.open(file_path)
+            is_valid = doc.is_pdf
+            doc.close()
+            return is_valid
+        except Exception:
+            try:
+                # Fallback to PyPDF2
+                with open(file_path, 'rb') as file:
+                    PyPDF2.PdfReader(file)
                 return True
-        except:
-            return False 
+            except Exception:
+                return False 
